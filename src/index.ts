@@ -4,7 +4,8 @@ import os from 'os'
 import path from 'path'
 import zlib from 'zlib'
 import * as tar from 'tar'
-import fetch from 'node-fetch'
+import http from 'http'
+import https from 'https'
 
 import type * as _sharp from 'sharp'
 import { Stream } from 'stream'
@@ -38,6 +39,7 @@ declare module 'koishi' {
 
 export class SharpService extends Service {
 	Sharp: typeof _sharp
+	tmpDir: string
 
 	declare readonly config: Required<Config>
 
@@ -48,11 +50,13 @@ export class SharpService extends Service {
 			timeout: 60000,
 			...config
 		}
+		this.tmpDir = path.resolve(ctx.baseDir,'tmp')
 	}
 
 
 	protected override async start() {
-		this.ctx.logger.info('插件已经启动')
+		this.ctx.logger.info(`插件已经启动，临时目录: ${this.tmpDir}`)
+		fs.mkdirSync(this.tmpDir, { recursive: true })
 		const nodeDir = path.resolve(this.ctx.baseDir, this.config.nodeBinaryPath)
 		// 确保 Skia 二进制文件的目录存在。
         fs.mkdirSync(nodeDir, { recursive: true })
@@ -61,44 +65,80 @@ export class SharpService extends Service {
 		this.Sharp = s
 	}
 
-	private async handleSharp(fileName:string,filePath:string) {
-		return new Promise<void>((resolve,reject)=>{	
-			const tmpFile = path.join(os.tmpdir(),fileName)
-			// 清理创建临时目录
-			fs.rmSync(tmpFile, {recursive:true,force:true})
-			fs.mkdirSync(tmpFile)
-			const tmp = path.join(tmpFile, fileName + '.tar.gz')
-			const url = `https://registry.npmmirror.com/-/binary/sharp/v${sharpVersion}/${fileName}.tar.gz`
-			this.ctx.logger.info(`正在下载 ${url}`)
-			this.downloadFile(url,tmp).then(() => {
-				this.ctx.logger(`文件已成功下载到${tmp}，开始解压...`)
-				const unzip = zlib.createGunzip()
-				const tarExtract = tar.x({
-					cwd: tmpFile
-				})
+	private async handleSharp(fileName: string, filePath: string): Promise<void> {
+		return new Promise<void>(async (resolve, reject) => {
+			// 创建临时目录
+			const tmpFile = path.join(this.tmpDir, fileName);
+			if (fs.existsSync(tmpFile)) {
+				fs.rmSync(tmpFile, { recursive: true, force: true });
+			}
+			fs.mkdirSync(tmpFile, { recursive: true });
+	
+			// 下载文件路径
+			const tmp = path.join(tmpFile, fileName + '.tar.gz');
+			const url = `https://registry.npmmirror.com/-/binary/sharp/v${sharpVersion}/${fileName}.tar.gz`;
+	
+			this.ctx.logger.info(`正在下载 ${url}`);
+	
+			try {
+				// 下载文件
+				await this.downloadFile(url, tmp);
+				this.ctx.logger.info(`文件已成功下载到 ${tmp}`);
+	
+				// 解压缩到目标路径的上级目录
+				const extractPath = path.dirname(filePath);
+	
+				this.ctx.logger.info(`开始解压文件到 ${extractPath}`);
+	
 				fs.createReadStream(tmp)
-					.pipe(unzip)
-					.pipe(tarExtract)
-					.on('finish', ()=>{
-						this.ctx.logger.info(`文件解压完成`)
-						fs.renameSync(path.join(tmpFile, 'v9/sharp.node'), filePath)
-						// 延迟删除临时目录
-						setTimeout(()=>{
-							try{
-								fs.rmSync(tmpFile, {recursive:true,force:true})
-								this.ctx.logger.info(`${tmpFile}已删除`)
-							} catch(err) {
-								this.ctx.logger.warn(`${tmpFile}删除失败，请手动删除`)
+					.pipe(zlib.createGunzip()) // 解压 .gz
+					.pipe(tar.extract({ cwd: extractPath })) // 解压 .tar
+					.on('finish', () => {
+						this.ctx.logger.info(`文件解压完成，解压到: ${extractPath}`);
+	
+						// 移动 build/Release 下的所有内容到解压目录
+						const releaseDir = path.join(extractPath, 'build/Release');
+						if (fs.existsSync(releaseDir)) {
+							const files = fs.readdirSync(releaseDir);
+							files.forEach(file => {
+								const srcPath = path.join(releaseDir, file);
+								const destPath = path.join(extractPath, file);
+								fs.renameSync(srcPath, destPath);
+							});
+							// 删除空的 build/Release 目录
+							fs.rmdirSync(releaseDir);
+							this.ctx.logger.info(`目录 ${releaseDir} 内容已移动到 ${extractPath}`);
+						} else {
+							this.ctx.logger.info(`未找到目录 ${releaseDir}`);
+						}
+	
+						// 延迟删除下载的压缩包
+						setTimeout(() => {
+							try {
+								fs.rmSync(tmp, { force: true });
+								this.ctx.logger.info(`临时文件 ${tmp} 已删除`);
+							} catch (err) {
+								this.ctx.logger.warn(`删除临时文件 ${tmp} 失败，请手动删除`);
 							}
-							resolve()
-						}, 300)
+							// 删除临时目录
+							try {
+								fs.rmSync(tmpFile, { recursive: true, force: true });
+								this.ctx.logger.info(`临时目录 ${tmpFile} 已删除`);
+							} catch (err) {
+								this.ctx.logger.warn(`删除临时目录 ${tmpFile} 失败，请手动删除`);
+							}
+							resolve();
+						}, 300);
 					})
-					.on('error',(err)=>{
-						this.ctx.logger.warn(`解压失败，请手动解压文件到${tmpFile}`)
-						reject(err)
-					})
-			})
-		})
+					.on('error', (err) => {
+						this.ctx.logger.error(`解压失败，错误信息: ${err.message}`);
+						reject(err);
+					});
+			} catch (error) {
+				this.ctx.logger.error(`下载失败，错误信息: ${error.message}`);
+				reject(error);
+			}
+		});
 	}
 
 	/**
@@ -180,25 +220,48 @@ export class SharpService extends Service {
 	 * @param savePath 文件的本地保存路径。
 	 */
 	private async downloadFile(url: string, savePath: string): Promise<void> {
-		const response = await fetch(url);
-
-		if (!response.ok) {
-			throw new Error(`无法下载文件，状态码: ${response.status}`);
-		}
-
-		const fileStream = fs.createWriteStream(savePath);
+		const file = fs.createWriteStream(savePath);
+		const protocol = url.startsWith('https') ? https : http;
 		
-		await new Promise<void>((resolve, reject) => {
-			response.body?.pipe(fileStream);
-			response.body?.on('error', (err) => {
-				reject(err);
-			});
-			fileStream.on('finish', () => {
-				resolve();
-			});
-		});
+		return new Promise((resolve, reject) => {
+			const download = (url: string) => {
+				protocol.get(url, (response) => {
+					if (response.statusCode === 302 || response.statusCode === 301) {
+						// 重定向，获取新的 URL
+						const location = response.headers.location;
+						if (location) {
+							// 递归处理重定向
+							download(new URL(location, url).toString());
+						} else {
+							reject(new Error(`重定向失败，无法获取新 URL`));
+						}
+						return;
+					}
+					
+					if (response.statusCode !== 200) {
+						reject(new Error(`下载失败，状态码: ${response.statusCode}`));
+						return;
+					}
+					
+					response.pipe(file);
+					
+					file.on('finish', () => {
+						file.close();
+						resolve()
+					});
+					
+					file.on('error', (err) => {
+						fs.unlink(savePath, () => {}); // 删除文件
+						reject(err);
+					});
+				}).on('error', (err) => {
+					fs.unlink(savePath, () => {}); // 删除文件
+					reject(err);
+				});
+			};
 
-		console.log(`文件已下载到: ${savePath}`);
+			download(url);
+		});
 	}
 
 
