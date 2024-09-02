@@ -9,14 +9,43 @@
     "dist"
   ],
   "license": "MIT",
+  "author": {
+    "name": "QuanhuZeYu",
+    "url": "https://github.com/QuanhuZeYu"
+  },
+  "homepage": "https://github.com/QuanhuZeYu/koishi-plugin-qhzy-sharp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QuanhuZeYu/koishi-plugin-qhzy-sharp.git"
+  },
   "scripts": {},
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "sharp"
   ],
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/tar": "^6.1.13",
+    "sharp": "^0.33.5"
+  },
   "peerDependencies": {
     "koishi": "^4.17.11"
+  },
+  "dependencies": {
+    "@quanhuzeyu/sharp-for-koishi": "^0.33.5"
+  },
+  "koishi": {
+    "description": {
+      "zh": "sharp服务的提供"
+    },
+    "services": {
+      "implements": [
+        "sharp"
+      ]
+    },
+    "locales": [
+      "zh"
+    ]
   }
 }
