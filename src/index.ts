@@ -7,8 +7,10 @@ import * as tar from 'tar'
 import http from 'http'
 import https from 'https'
 
-import type * as _sharp from '@quanhuzeyu/sharp-for-koishi'
+import type _sharp from '@quanhuzeyu/sharp-for-koishi'
 import { Stream } from 'stream'
+
+const _srcDir = path.resolve(__dirname)
 
 export const name = 'qhzy-sharp'
 export const filter = false
@@ -288,5 +290,11 @@ export class SharpService extends Service {
 
 export function apply(ctx: Context) {
 	ctx.plugin(SharpService)
-	const sharp = ctx.Sharp
+	// 开始测试
+	const sharp = ctx.Sharp.Sharp
+	const img1 = fs.readFileSync(path.resolve(_srcDir,'tmp/test.jpg'))
+	const img2 = fs.readFileSync(path.resolve(_srcDir,'tmp/test2.jpg'))
+	const compose = async() => sharp(img1).resize(50,50).toBuffer()
+	const save = async() => fs.writeFileSync(path.resolve(_srcDir,'tmp/test3.jpg'), await compose())
+	save()
 }
