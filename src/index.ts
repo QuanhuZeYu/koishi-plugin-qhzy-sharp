@@ -64,7 +64,7 @@ export class SharpService extends Service {
         fs.mkdirSync(nodeDir, { recursive: true })
         // 加载 Skia 的原生绑定，并将其属性合并到当前类实例中。
         const s = await this.getNativeBinding()
-		this.Sharp = s
+		this.Sharp = s[s.length-1]
 	}
 
 	private async handleSharp(fileName: string, filePath: string): Promise<void> {
@@ -194,12 +194,18 @@ export class SharpService extends Service {
 		this.ctx.logger.info(`二进制文件名确定：${nodeFile}`)
         const nodePath = path.join(nodeDir, 'package', nodeFile)
 		this.ctx.logger.info(`二进制文件存储路径：${nodePath}`)
+		const packDir = path.join(nodeDir, 'package')
 
 		// 确保包目录存在。
-        fs.mkdirSync(path.join(nodeDir, 'package'), { recursive: true })
-        const localFileExisted = fs.existsSync(nodePath)
+        fs.mkdirSync(packDir, { recursive: true })
+        // 获取 nodePath 的上级目录
+		const parentDir = path.dirname(nodePath);
+		// 获取上级目录中的所有文件和目录
+		const filesInParentDir = fs.readdirSync(parentDir);
+		// 检查是否存在 .node 文件
+		const localFileExisted = filesInParentDir.some(file => file.endsWith('.node'));
 		// 定义全局变量，用于在 sharp.js 中引用本地文件。
-        global.__QHZY_SHARP_PATH = nodePath
+        
 		if(!localFileExisted) { // 如果本地文件不存在，下载并解压二进制文件
 			this.ctx.logger.info('初始化 sharp 服务')
 			await this.handleSharp(nodeName, nodePath)
@@ -207,9 +213,10 @@ export class SharpService extends Service {
 		}
 		try {
 			// 这个加载的文件从全局变量中导入相关库 ??
+			global.__QHZY_SHARP_PATH____ = packDir
 			nativeBinding = require('@quanhuzeyu/sharp-for-koishi')
 		} catch (err) {
-			this.ctx.logger.warn(`sharp 服务初始化失败，请手动下载 ${nodeName}.tar.gz 到 ${nodeDir}`)
+			this.ctx.logger.warn(`sharp 服务初始化失败: ${packDir}`)
 			throw err
 		}
 		return nativeBinding	
@@ -290,11 +297,4 @@ export class SharpService extends Service {
 
 export function apply(ctx: Context) {
 	ctx.plugin(SharpService)
-	// 开始测试
-	const sharp = ctx.Sharp.Sharp
-	const img1 = fs.readFileSync(path.resolve(_srcDir,'tmp/test.jpg'))
-	const img2 = fs.readFileSync(path.resolve(_srcDir,'tmp/test2.jpg'))
-	const compose = async() => sharp(img1).resize(50,50).toBuffer()
-	const save = async() => fs.writeFileSync(path.resolve(_srcDir,'tmp/test3.jpg'), await compose())
-	save()
 }
