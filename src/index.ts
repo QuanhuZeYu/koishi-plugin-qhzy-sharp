@@ -34,7 +34,7 @@ const napiLabel = 'napi-v9'
 
 declare module 'koishi' {
 	interface Context {
-		Sharp: SharpService
+		QhzySharp: SharpService
 	}
 }
 
@@ -46,7 +46,7 @@ export class SharpService extends Service {
 	declare readonly config: Required<Config>
 
 	constructor(ctx: Context, config: Config) {
-		super(ctx, 'sharp')
+		super(ctx, 'QhzySharp')
 		this.config = {
 			nodeBinaryPath: 'data/assets/qhzy/sharp',
 			timeout: 60000,
@@ -65,6 +65,7 @@ export class SharpService extends Service {
         // 加载 Skia 的原生绑定，并将其属性合并到当前类实例中。
         const s = await this.getNativeBinding()
 		this.Sharp = s
+		this.ctx.logger.info(`sharp 已加载: ${this.Sharp}`)
 	}
 
 	private async handleSharp(fileName: string, filePath: string): Promise<void> {
