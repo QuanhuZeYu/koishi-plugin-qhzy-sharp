@@ -64,7 +64,7 @@ export class SharpService extends Service {
         fs.mkdirSync(nodeDir, { recursive: true })
         // 加载 Skia 的原生绑定，并将其属性合并到当前类实例中。
         const s = await this.getNativeBinding()
-		this.Sharp = s[s.length-1]
+		this.Sharp = s
 	}
 
 	private async handleSharp(fileName: string, filePath: string): Promise<void> {
