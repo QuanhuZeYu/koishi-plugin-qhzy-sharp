@@ -7,7 +7,7 @@ import * as tar from 'tar'
 import http from 'http'
 import https from 'https'
 
-import type * as _sharp from 'sharp'
+import type * as _sharp from '@quanhuzeyu/sharp-for-koishi'
 import { Stream } from 'stream'
 
 export const name = 'qhzy-sharp'
@@ -32,7 +32,7 @@ const napiLabel = 'napi-v9'
 
 declare module 'koishi' {
 	interface Context {
-		sharp: SharpService
+		Sharp: SharpService
 	}
 }
 
@@ -197,7 +197,7 @@ export class SharpService extends Service {
         fs.mkdirSync(path.join(nodeDir, 'package'), { recursive: true })
         const localFileExisted = fs.existsSync(nodePath)
 		// 定义全局变量，用于在 sharp.js 中引用本地文件。
-        global.__SKIA_DOWNLOAD_PATH = nodePath
+        global.__QHZY_SHARP_PATH = nodePath
 		if(!localFileExisted) { // 如果本地文件不存在，下载并解压二进制文件
 			this.ctx.logger.info('初始化 sharp 服务')
 			await this.handleSharp(nodeName, nodePath)
@@ -288,4 +288,5 @@ export class SharpService extends Service {
 
 export function apply(ctx: Context) {
 	ctx.plugin(SharpService)
+	const sharp = ctx.Sharp
 }
