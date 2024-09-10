@@ -52,7 +52,7 @@ export class SharpService extends Service {
 			timeout: 60000,
 			...config
 		}
-		this.tmpDir = path.resolve(ctx.baseDir,'tmp')
+		this.tmpDir = path.resolve(ctx.baseDir,'data/assets/qhzy/sharp/tmp')
 	}
 
 
@@ -65,7 +65,7 @@ export class SharpService extends Service {
         // 加载 Skia 的原生绑定，并将其属性合并到当前类实例中。
         const s = await this.getNativeBinding()
 		this.Sharp = s
-		this.ctx.logger.info(`sharp 已加载: ${this.Sharp}`)
+		this.ctx.logger.info(`sharp 已成功加载`)
 	}
 
 	private async handleSharp(fileName: string, filePath: string): Promise<void> {
