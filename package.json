@@ -1,7 +1,7 @@
 {
   "name": "@quanhuzeyu/koishi-plugin-qhzy-sharp",
   "description": "sharp服务的提供",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -19,9 +19,9 @@
     "url": "git+https://github.com/QuanhuZeYu/koishi-plugin-qhzy-sharp.git"
   },
   "scripts": {
-    "allpub": "npm run build && npm run pubgit && npm run pubnpm",
-    "pubgit": "npm publish --workspace=@quanhuzeyu/koishi-plugin-qhzy-sharp --registry=https://npm.pkg.github.com --access=public",
-    "pubnpm": "npm publish --workspace=@quanhuzeyu/koishi-plugin-qhzy-sharp --registry=https://registry.npmjs.org --access=public"
+    "allpub": "npm run pubgit && npm run pubnpm",
+    "pubgit": "npm publish --registry=https://npm.pkg.github.com --access=public",
+    "pubnpm": "npm publish --registry=https://registry.npmjs.org --access=public"
   },
   "keywords": [
     "chatbot",
