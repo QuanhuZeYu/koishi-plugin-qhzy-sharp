@@ -32,8 +32,8 @@
     "sharp"
   ],
   "devDependencies": {
-    "@types/tar": "^6.1.13",
     "@quanhuzeyu/sharp-for-koishi": "^0.0.7",
+    "@types/tar": "^6.1.13",
     "tar": "^7.1.0"
   },
   "peerDependencies": {
@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@quanhuzeyu/sharp-for-koishi": "^0.0.7",
+    "koishi-plugin-w-node": "^0.0.1",
     "tar": "^7.4.3"
   },
   "koishi": {
