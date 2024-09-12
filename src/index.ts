@@ -1,6 +1,6 @@
 import { Context, Schema, Service } from 'koishi'
 import path from 'path'
-import * as qzNode from '@quanhuzeyu/koishi-plugin-node'
+import type * as qzNode from '@quanhuzeyu/koishi-plugin-node'
 
 import type _sharp from '@quanhuzeyu/sharp-for-koishi'
 

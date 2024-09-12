@@ -1,7 +1,7 @@
 {
   "name": "@quanhuzeyu/koishi-plugin-qhzy-sharp",
   "description": "sharp服务的提供",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -32,7 +32,6 @@
     "sharp"
   ],
   "devDependencies": {
-    "@quanhuzeyu/sharp-for-koishi": "^0.0.7",
     "@types/tar": "^6.1.13",
     "tar": "^7.1.0"
   },
@@ -40,8 +39,7 @@
     "koishi": "^4.17.11"
   },
   "dependencies": {
-    "@quanhuzeyu/sharp-for-koishi": "^0.0.7",
-    "@quanhuzeyu/koishi-plugin-node": "0.0.3"
+    "@quanhuzeyu/koishi-plugin-node": "^0.0.8"
   },
   "koishi": {
     "description": {
