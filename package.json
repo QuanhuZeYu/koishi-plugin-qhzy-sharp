@@ -19,6 +19,8 @@
     "url": "git+https://github.com/QuanhuZeYu/koishi-plugin-qhzy-sharp.git"
   },
   "scripts": {
+    "build": "node build.js",
+    "clean": "node clean.js",
     "allpub": "npm run pubgit && npm run pubnpm",
     "pubgit": "npm publish --registry=https://npm.pkg.github.com --access=public",
     "pubnpm": "npm publish --registry=https://registry.npmjs.org --access=public"
@@ -38,7 +40,8 @@
     "koishi": "^4.17.11"
   },
   "dependencies": {
-    "@quanhuzeyu/sharp-for-koishi": "^0.0.7"
+    "@quanhuzeyu/sharp-for-koishi": "^0.0.7",
+    "tar": "^7.4.3"
   },
   "koishi": {
     "description": {
