@@ -1,6 +1,6 @@
 import { Context, Schema, Service } from 'koishi'
 import path from 'path'
-import * as wnode from 'koishi-plugin-w-node'
+import * as qzNode from '@quanhuzeyu/koishi-plugin-node'
 
 import type _sharp from '@quanhuzeyu/sharp-for-koishi'
 
@@ -66,7 +66,7 @@ export class SharpService extends Service {
         })
         .catch(err => {
             logger.error(err)
-            logger.error('sharp加载失败，请检查sharp的版本是否正确')
+            logger.error('sharp加载失败，请检查node服务')
         })
     }
 }
