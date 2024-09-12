@@ -1,6 +1,5 @@
 import { Context, Schema, Service } from 'koishi'
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
 import zlib from 'zlib'
 import * as tar from 'tar'
@@ -8,17 +7,19 @@ import http from 'http'
 import https from 'https'
 
 import type _sharp from '@quanhuzeyu/sharp-for-koishi'
-import { Stream } from 'stream'
+import { exec, spawn } from 'child_process'
 
 const _srcDir = path.resolve(__dirname)
 
 export const name = 'qhzy-sharp'
+export const usage = `因本人能力有限，sharp的libvips编译文件暂无法通过本脚本一站式解决\n\n
+如果libvips不在二进制下载包中，请手动将对应的编译libvips放入nodeBinaryPath下@img目录中的对应架构文件夹中，下方设置中点开编辑Json即可查看对应的目录`
 export const filter = false
 
 export interface Config { 
-	nodeBinaryPath?: string,
-	timeout?: number
-	sharpV?: string
+	nodeBinaryPath: string,
+	timeout: number
+	sharpV: string
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -31,7 +32,6 @@ export const Config: Schema<Config> = Schema.object({
 	sharpV: Schema.string().description('指定sharp的版本').default('0.33.5')
 })
 
-const sharpVersion = '0.33.5'
 const napiLabel = 'napi-v9'
 
 declare module 'koishi' {
@@ -43,36 +43,47 @@ declare module 'koishi' {
 
 export class SharpService extends Service {
 	Sharp: typeof _sharp
-	tmpDir: string
-	sharpV: string
-	nodeBinaryPath: string
+	tmpDir: string  /**临时目录: data/assets/qhzy/sharp/tmp */ = path.resolve(this.ctx.baseDir,'data/assets/qhzy/sharp/tmp')
+	sharpV: string  /**sharp的版本  默认为0.33.5 */ = '0.33.5'
+	nodeBinaryPath: string = 'data/assets/qhzy/sharp'
 
 	declare readonly config: Required<Config>
 
 	constructor(ctx: Context, config: Config) {
 		super(ctx, 'QhzySharp')
-		this.config = {
-			nodeBinaryPath: path.resolve(ctx.baseDir, 'data/assets/qhzy/sharp'),
-			timeout: 60000,
-			sharpV: '0.33.5',
-			...config,
-		}
-		this.tmpDir = path.resolve(ctx.baseDir,'data/assets/qhzy/sharp/tmp')
+        this.config = {
+            nodeBinaryPath: 'data/assets/qhzy/sharp',
+            timeout: 60000,
+            sharpV: '0.33.5',
+            ...config
+        }
+        this.tmpDir = path.resolve(ctx.baseDir,'data/assets/qhzy/sharp/tmp')
+        this.sharpV = this.config.sharpV
+        this.nodeBinaryPath = this.config.nodeBinaryPath
 	}
 
 
 	protected override async start() {
-        this.ctx.logger.info(`插件已经启动，临时目录: ${this.tmpDir}`);
+        const logger = this.ctx.logger
+        logger.info(this.tmpDir, this.sharpV, this.nodeBinaryPath)
+        logger.info(`插件已经启动，临时目录: ${this.tmpDir}`);
         await this.ensureDir(this.tmpDir);
-        await this.ensureDir(path.resolve(this.ctx.baseDir, this.config.nodeBinaryPath));
-        this.Sharp = await this.getNativeBinding();
+        await this.ensureDir(path.resolve(this.ctx.baseDir, this.nodeBinaryPath));
+        const isModel = await this.tryLoadSharp()
+        if(isModel) {this.Sharp = isModel;return}
+        const sharpPath = await this.fullDownloadSharp()
+        await this.compileSharpAndMove(sharpPath)
+        this.ctx.logger.info(`sharp 二进制文件已编译成功`)
+        // this.Sharp = await this.getNativeBinding();
+        this.cleanTMP()
+        this.Sharp = await this.tryLoadSharp()
         this.ctx.logger.info(`sharp 已成功加载`);
     }
 
 	private async handleSharp(fileName: string, filePath: string): Promise<void> {
         const tmpFile = path.join(this.tmpDir, fileName);
         const tmpTarGz = path.join(tmpFile, `${fileName}.tar.gz`);
-        const url = `https://registry.npmmirror.com/-/binary/sharp/v${sharpVersion}/${fileName}.tar.gz`;
+        const url = `https://registry.npmmirror.com/-/binary/sharp/v${this.sharpV}/${fileName}.tar.gz`;
 
         this.ctx.logger.info(`正在下载 ${url}`);
 
@@ -161,16 +172,16 @@ export class SharpService extends Service {
 	 * 11.win32-x64
 	 */
 	private async getNativeBinding() {
-        const nodeDir = path.resolve(this.ctx.baseDir, this.config.nodeBinaryPath);
+        const nodeDir = path.resolve(this.ctx.baseDir, this.nodeBinaryPath);
         const { platform, arch } = process;
         const platformArchMap = {
-            win32: { x64: `sharp-v${sharpVersion}-${napiLabel}-win32-x64`, ia32: `sharp-v${sharpVersion}-${napiLabel}-win32-ia32` },
-            darwin: { x64: `sharp-v${sharpVersion}-${napiLabel}-darwin-x64`, arm64: `sharp-v${sharpVersion}-${napiLabel}-darwin-arm64` },
+            win32: { x64: `sharp-v${this.sharpV}-${napiLabel}-win32-x64`, ia32: `sharp-v${this.sharpV}-${napiLabel}-win32-ia32` },
+            darwin: { x64: `sharp-v${this.sharpV}-${napiLabel}-darwin-x64`, arm64: `sharp-v${this.sharpV}-${napiLabel}-darwin-arm64` },
             linux: {
-                x64: `sharp-v${sharpVersion}-${napiLabel}-linux${this.isMusl() ? 'musl' : ''}-x64`,
-                arm64: `sharp-v${sharpVersion}-${napiLabel}-linux${this.isMusl() ? 'musl' : ''}-arm64`,
-                arm: `sharp-v${sharpVersion}-${napiLabel}-linux-arm`,
-                s390x: `sharp-v${sharpVersion}-${napiLabel}-linux-s390x`,
+                x64: `sharp-v${this.sharpV}-${napiLabel}-linux${this.isMusl() ? 'musl' : ''}-x64`,
+                arm64: `sharp-v${this.sharpV}-${napiLabel}-linux${this.isMusl() ? 'musl' : ''}-arm64`,
+                arm: `sharp-v${this.sharpV}-${napiLabel}-linux-arm`,
+                s390x: `sharp-v${this.sharpV}-${napiLabel}-linux-s390x`,
             },
         };
 
@@ -181,7 +192,7 @@ export class SharpService extends Service {
         const nodeName = platformArchMap[platform][arch];
 		// this.ctx.logger.info(`nodeName: ${nodeName}`)
         const nodeFile = `${nodeName}.node`;
-        const nodePath = path.join(nodeDir, 'package', nodeFile);
+        const nodePath = path.join(nodeDir, nodeFile);
 
         await this.ensureDir(path.dirname(nodePath));
 
@@ -190,14 +201,16 @@ export class SharpService extends Service {
         if (!localFileExisted) {
             this.ctx.logger.info('初始化 sharp 服务');
             await this.handleSharp(nodeName, nodePath);
+            this.cleanTMP()
             this.ctx.logger.info('sharp 服务初始化完成');
         }
 
         try {
-            global.__QHZY_SHARP_PATH____ = path.join(nodeDir, 'package');
+            global.__QHZY_SHARP_PATH____ = path.join(nodeDir);
+            this.cleanTMP()
             return require('@quanhuzeyu/sharp-for-koishi');
         } catch (err) {
-            this.ctx.logger.warn(`sharp 服务加载失败: ${path.join(nodeDir, 'package')}`);
+            this.ctx.logger.warn(`sharp 服务加载失败: ${path.join(nodeDir)}`);
             throw err;
         }
     }
@@ -274,6 +287,162 @@ export class SharpService extends Service {
         } catch (err) {
             this.ctx.logger.error(`创建目录失败：${dir}`, err);
             throw err;
+        }
+    }
+
+    /**
+     * 
+     * @returns sharpPath sharp被下载的目录
+     */
+    private async fullDownloadSharp() {
+        const version = this.sharpV
+        const fullDLTmpDir = path.join(this.tmpDir, 'fullSharp')
+        await this.ensureDir(fullDLTmpDir)
+        const packageName = 'sharp'
+        await this.installPackage(packageName, fullDLTmpDir)
+        this.ctx.logger.info(`已下载 ${packageName} 包`)
+        const sharpPath = path.join(fullDLTmpDir, 'node_modules', 'sharp')
+        return sharpPath
+    }
+
+    /**
+     * 在sharp目录下运行 npm install 来编译
+     * 编译完成后，将 sharpPath 上级目录中的 '@img' 文件夹移动到 this.nodeBinaryPath 中
+     * @param sharpPath sharp被下载的目录
+     */
+    private async compileSharpAndMove(sharpPath: string): Promise<void> {
+        // 编译 sharp
+        await new Promise<void>((resolve, reject) => {
+            // 使用 `spawn` 执行 `npm install` 命令
+            const installProcess = spawn('npm', ['install'], { cwd: sharpPath, shell: true });
+
+            // 监听输出信息
+            installProcess.stdout.on('data', (data) => {
+                this.ctx.logger.info(`输出: ${data}`);
+            });
+
+            installProcess.stderr.on('data', (data) => {
+                // this.ctx.logger.error(`错误输出: ${data}`);
+            });
+
+            // 监听进程关闭事件
+            installProcess.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`npm install 进程退出，退出码: ${code}`));
+                    return;
+                }
+                resolve();
+            });
+
+            // 监听进程错误事件
+            installProcess.on('error', (err) => {
+                reject(new Error(`无法执行 npm install 命令: ${err.message}`));
+            });
+        });
+
+        // 获取 @img 文件夹路径
+        const parentDir = path.dirname(sharpPath);
+        const imgDir = path.join(parentDir, '@img');
+
+        if (!fs.existsSync(imgDir)) {
+            this.ctx.logger.error(`未找到目录: ${imgDir}`);
+            return;
+        }
+
+        // 确保目标目录存在
+        const targetDir = path.resolve(this.nodeBinaryPath);
+        fs.mkdirSync(targetDir, { recursive: true });
+
+        // 移动整个 @img 文件夹到目标路径
+        const destPath = path.join(targetDir, '@img');
+
+        try {
+            fs.renameSync(imgDir, destPath);
+            this.ctx.logger.info(`已将 ${imgDir} 目录移动到 ${destPath}`);
+        } catch (err) {
+            this.ctx.logger.error(`移动 @img 目录时发生错误: ${err.message}`);
+        }
+    }
+
+    /**
+     * 在指定目录中安装 npm 包
+     * @param packageName 包名称
+     * @param targetDir 目标目录
+     */
+    private async installPackage(packageName: string, targetDir: string): Promise<void> {
+        // 在目标目录中创建一个新的空 package.json
+        const packageJsonPath = path.join(targetDir, 'package.json');
+        if (!fs.existsSync(packageJsonPath)) {
+            fs.writeFileSync(packageJsonPath, JSON.stringify({}), 'utf8');
+        }
+        return new Promise((resolve, reject) => {
+            // 使用 spawn 执行 npm install 命令，并添加 --no-save 标志
+            const npmInstall = spawn('npm', ['install', packageName, '--no-save'], { cwd: targetDir, shell: true });
+            // 监听输出信息
+            npmInstall.stdout.on('data', (data) => {
+                // this.ctx.logger.info(`输出: ${data}`);
+            });
+
+            npmInstall.stderr.on('data', (data) => {
+                // this.ctx.logger.error(`错误输出: ${data}`);
+            });
+
+            // 监听进程关闭事件
+            npmInstall.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`npm install 进程退出，退出码: ${code}`));
+                    return;
+                }
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * 清除文件夹 tmp
+     */
+    private cleanTMP() {
+        const tmpDir = this.tmpDir
+        if(fs.existsSync(tmpDir)) {
+            fs.rmSync(tmpDir, { recursive: true })
+            this.ctx.logger(`临时文件夹已清除完毕: ${tmpDir}`)
+        } else {
+            this.ctx.logger(`临时文件夹不存在: ${tmpDir}; 跳过删除操作`)
+        }
+    }
+
+    private tryLoadSharp() {
+        let foundNodeDir: string | undefined;
+        const logger = this.ctx.logger
+        logger.info(`正在尝试寻找.node 文件`)
+        const imgDir = path.resolve(this.config.nodeBinaryPath, '@img')
+        logger.info(`寻找路径: ${imgDir}`)
+        // 遍历imgDir寻找.node文件，.node所在的路径父级作为 global.__QHZY_SHARP_PATH____ 的值
+        // 定义递归搜索函数
+        const findNodeFileDir = (dir: string): string | undefined => {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+                const fullPath = path.join(dir, file);
+                if (fs.statSync(fullPath).isDirectory()) {
+                    // 如果是目录，则递归搜索
+                    const result = findNodeFileDir(fullPath);
+                    if (result) return result;
+                } else if (file.endsWith('.node')) {
+                    // 如果是 .node 文件，则返回其父目录
+                    return dir;
+                }
+            }
+            return undefined;
+        };
+        let nodeFilePath
+        try {nodeFilePath = findNodeFileDir(imgDir)} catch (e) {logger.info(`没有找到.node，开始下载安装`);return false}
+        const nodeFileDir = nodeFilePath ? path.resolve(imgDir, nodeFilePath) : undefined
+        if(!nodeFileDir) {logger.info(`没有找到.node`);return false}
+        else {
+            global.__QHZY_SHARP_PATH____ = nodeFileDir
+            const sharpModule = require('@quanhuzeyu/sharp-for-koishi')
+            logger.info(`sharp已加载`)
+            return sharpModule
         }
     }
 }
