@@ -14,3 +14,7 @@ function apply(ctx: Context) {
 }
 
 ```
+
+## 更新记录
+
+v1.1.0: 改为在隔离环境中使用npm指令来动态编译sharp
